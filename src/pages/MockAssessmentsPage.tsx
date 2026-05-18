@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/shared/navbar";
+import { Footer } from "@/components/shared/footer";
 import {
   ClipboardList, Clock, CheckCircle2, Loader2, Plus, Pencil,
   Trash2, X, AlertCircle, ChevronRight, Trophy, BarChart3,
@@ -339,6 +340,7 @@ export default function MockAssessmentsPage() {
       </div>
 
       {modal && <AdminModal initial={modal} onSave={handleSave} onClose={() => setModal(null)} saving={saving} />}
+      <Footer />
     </div>
   );
 }

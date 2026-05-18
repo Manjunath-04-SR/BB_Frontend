@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { contestApi, compileApi } from "@/lib/api";
-import { ArrowLeft, Play, CheckCircle2, XCircle, Clock, Loader2, RotateCcw, Copy, Check, Terminal, BookOpen, Trophy, ChevronRight, ChevronDown, ChevronUp, Code2, AlertCircle, Send } from "lucide-react";
+import { ArrowLeft, Play, CheckCircle2, XCircle, Clock, Loader2, RotateCcw, Copy, Check, Terminal, BookOpen, Trophy, ChevronRight, ChevronDown, ChevronUp, Code2, AlertCircle, Send, Undo2, Redo2 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface ContestProblem {
@@ -139,12 +139,34 @@ export default function ContestSolverPage() {
   const [outputTab, setOutputTab] = useState<"output" | "submit" | "input">("output");
   const [customInput, setCustomInput] = useState("");
   const [copied, setCopied] = useState(false);
-  const [outputExpanded, setOutputExpanded] = useState(false);
+  const [outputHeight, setOutputHeight] = useState(36);
   const [completionOptions, setCompletionOptions] = useState<string[]>([]);
   const [completionPrefix, setCompletionPrefix] = useState("");
   const [activeCompletionIndex, setActiveCompletionIndex] = useState(0);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const gutterRef   = useRef<HTMLDivElement>(null);
+
+  const handleUndo = () => { textareaRef.current?.focus(); document.execCommand("undo"); };
+  const handleRedo = () => { textareaRef.current?.focus(); document.execCommand("redo"); };
+
+  // Drag-to-resize output panel
+  const dragRef = useRef<{ active: boolean; startY: number; startH: number }>({ active: false, startY: 0, startH: 0 });
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragRef.current.active) return;
+      const delta = dragRef.current.startY - e.clientY;
+      setOutputHeight(Math.max(36, Math.min(520, dragRef.current.startH + delta)));
+    };
+    const onUp = () => { dragRef.current.active = false; };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup",   onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, []);
+  const startOutputDrag = (e: React.MouseEvent) => {
+    dragRef.current = { active: true, startY: e.clientY, startH: outputHeight };
+    e.preventDefault();
+  };
   const isLoggedIn = !!localStorage.getItem("token");
 
   useEffect(() => {
@@ -189,8 +211,8 @@ export default function ContestSolverPage() {
     setOutputTab("output");
   }, [problemSlug]);
 
-  useEffect(() => { if (runOutput !== null) setOutputExpanded(true); }, [runOutput]);
-  useEffect(() => { if (submitResult !== null) setOutputExpanded(true); }, [submitResult]);
+  useEffect(() => { if (runOutput !== null) setOutputHeight((h) => h < 200 ? 260 : h); }, [runOutput]);
+  useEffect(() => { if (submitResult !== null) setOutputHeight((h) => h < 200 ? 260 : h); }, [submitResult]);
 
   const getCompletionPrefix = (value: string, cursor: number) => {
     const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
@@ -349,7 +371,7 @@ export default function ContestSolverPage() {
   const visibleTestCases = problem.testCases?.filter((t) => !t.isHidden) || [];
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col">
+    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
       {/* ── Top Bar ── */}
       <div className="bg-slate-800 border-b border-slate-700 px-4 py-2.5 flex items-center justify-between shrink-0 gap-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -398,7 +420,7 @@ export default function ContestSolverPage() {
       </div>
 
       {/* ── Main Content ── */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden" style={{ height: "calc(100vh - 49px)" }}>
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
         {/* ── LEFT: Problem ── */}
         <div className="w-full h-[45%] md:h-full md:w-[45%] md:min-w-[320px] bg-slate-50 flex flex-col border-b md:border-b-0 md:border-r border-slate-700 overflow-hidden">
           {/* Points badge */}
@@ -512,7 +534,14 @@ export default function ContestSolverPage() {
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <button onClick={handleUndo} title="Undo (Ctrl+Z)" className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
+                <Undo2 className="w-3 h-3" />
+              </button>
+              <button onClick={handleRedo} title="Redo (Ctrl+Y)" className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
+                <Redo2 className="w-3 h-3" />
+              </button>
+              <div className="w-px h-4 bg-slate-600" />
               <button onClick={handleCopy} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
                 {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
                 {copied ? "Copied!" : "Copy"}
@@ -532,27 +561,38 @@ export default function ContestSolverPage() {
           </div>
 
           {/* Code editor */}
-          <div className="flex-1 min-h-0 relative overflow-hidden">
-              <textarea
-                ref={textareaRef}
-                value={code[language]}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  const cursor = e.target.selectionStart;
-                  setCode((p) => ({ ...p, [language]: value }));
-                  updateCompletions(value, cursor);
-                }}
-                onSelect={() => {
-                  const el = textareaRef.current;
-                  if (!el) return;
-                  updateCompletions(code[language], el.selectionStart);
-                }}
-                onKeyDown={handleKeyDown}
-                spellCheck={false}
-                className="absolute inset-0 w-full h-full bg-white text-slate-900 font-mono text-sm p-4 resize-none outline-none leading-6 selection:bg-blue-200 border border-slate-200 overflow-y-auto"
-                style={{ fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace", tabSize: 4 }}
-              />
+          <div className="flex-1 min-h-0 flex overflow-hidden">
+            {/* Line number gutter */}
+            <div
+              ref={gutterRef}
+              className="shrink-0 w-11 bg-slate-200 text-slate-400 font-mono text-sm leading-6 text-right select-none overflow-hidden pt-4 pr-2 border-r border-slate-300"
+              style={{ fontFamily: "'JetBrains Mono','Fira Code',Consolas,monospace" }}
+            >
+              {code[language].split("\n").map((_, i) => (
+                <div key={i} className="leading-6">{i + 1}</div>
+              ))}
             </div>
+            <textarea
+              ref={textareaRef}
+              value={code[language]}
+              onChange={(e) => {
+                const value = e.target.value;
+                const cursor = e.target.selectionStart;
+                setCode((p) => ({ ...p, [language]: value }));
+                updateCompletions(value, cursor);
+              }}
+              onSelect={() => {
+                const el = textareaRef.current;
+                if (!el) return;
+                updateCompletions(code[language], el.selectionStart);
+              }}
+              onKeyDown={handleKeyDown}
+              onScroll={(e) => { if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop; }}
+              spellCheck={false}
+              className="flex-1 min-w-0 bg-white text-slate-900 font-mono text-sm p-4 pl-3 resize-none outline-none leading-6 selection:bg-blue-200 overflow-y-auto"
+              style={{ fontFamily: "'JetBrains Mono', 'Fira Code', Consolas, monospace", tabSize: 4 }}
+            />
+          </div>
             <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-4 py-3">
               <p className="text-xs font-semibold text-slate-500 mb-2">Completions</p>
               <div className="flex flex-wrap gap-2">
@@ -579,9 +619,18 @@ export default function ContestSolverPage() {
 
             {/* Output / Submit Results Panel */}
             <div
-              className="shrink-0 flex flex-col border-t border-slate-300 bg-slate-100 transition-all duration-200 overflow-hidden"
-              style={{ height: outputExpanded ? "260px" : "36px" }}
+              className="shrink-0 flex flex-col border-t border-slate-300 bg-slate-100 overflow-hidden"
+              style={{ height: `${outputHeight}px` }}
             >
+              {/* Drag Handle */}
+              <div
+                onMouseDown={startOutputDrag}
+                className="h-1.5 bg-slate-200 hover:bg-blue-400 cursor-ns-resize flex items-center justify-center group shrink-0 transition-colors"
+                title="Drag to resize output panel"
+              >
+                <div className="w-8 h-0.5 rounded-full bg-slate-400 group-hover:bg-white transition-colors" />
+              </div>
+
               <div className="flex items-center justify-between border-b border-slate-200 px-4 h-9 shrink-0">
                 <div className="flex items-center">
                   {[
@@ -589,7 +638,7 @@ export default function ContestSolverPage() {
                     { key: "submit" as const, label: "Result", icon: <Send className="w-3 h-3" /> },
                     { key: "input" as const, label: "Custom Input", icon: <Code2 className="w-3 h-3" /> },
                   ].map(({ key, label, icon }) => (
-                    <button key={key} onClick={() => { setOutputTab(key); setOutputExpanded(true); }} className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${outputTab === key ? "border-blue-500 text-blue-600" : "border-transparent text-slate-400 hover:text-slate-600"}`}>
+                    <button key={key} onClick={() => { setOutputTab(key); setOutputHeight((h) => h < 200 ? 260 : h); }} className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors ${outputTab === key ? "border-blue-500 text-blue-600" : "border-transparent text-slate-400 hover:text-slate-600"}`}>
                       {icon}
                       {label}
                       {key === "submit" && submitResult && <span className={`w-2 h-2 rounded-full ml-1 ${submitResult.status === "accepted" ? "bg-green-500" : "bg-red-500"}`} />}
@@ -598,11 +647,11 @@ export default function ContestSolverPage() {
                   ))}
                 </div>
                 <button
-                  onClick={() => setOutputExpanded((v) => !v)}
+                  onClick={() => setOutputHeight((h) => h <= 36 ? 260 : 36)}
                   className="flex items-center gap-1 px-2 py-1 text-[10px] text-slate-400 hover:text-slate-700 transition-colors"
-                  title={outputExpanded ? "Collapse output" : "Expand output"}
+                  title={outputHeight > 36 ? "Collapse output" : "Expand output"}
                 >
-                  {outputExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                  {outputHeight > 36 ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
                 </button>
               </div>
 

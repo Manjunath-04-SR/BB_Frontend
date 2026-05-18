@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft, Play, CheckCircle2, Circle, ChevronDown, ChevronUp, ExternalLink,
   RotateCcw, Copy, Check, Loader2, Terminal, BookOpen, FlaskConical,
-  ChevronRight, Code2, Trophy, ChevronLeft,
+  ChevronRight, Code2, Trophy, ChevronLeft, Undo2, Redo2, Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,7 @@ const LANGUAGES = [
   { id: "javascript", label: "JavaScript", ext: "js"   },
   { id: "cpp",        label: "C++",        ext: "cpp"  },
   { id: "java",       label: "Java",       ext: "java" },
+  { id: "sql",        label: "SQL",        ext: "sql"  },
 ] as const;
 type LangId = (typeof LANGUAGES)[number]["id"];
 
@@ -207,6 +208,21 @@ const CODE_SNIPPETS: Record<LangId, Array<{ trigger: string; snippet: string; la
     { trigger: "char",      label: "char ch",                     snippet: "char ch = " },
     { trigger: "boolean",   label: "boolean flag = false",        snippet: "boolean flag = false;" },
   ],
+  sql: [
+    { trigger: "sel",    label: "SELECT * FROM table",          snippet: "SELECT * FROM " },
+    { trigger: "whe",    label: "WHERE condition",              snippet: "WHERE " },
+    { trigger: "ord",    label: "ORDER BY column",              snippet: "ORDER BY " },
+    { trigger: "gro",    label: "GROUP BY column",              snippet: "GROUP BY " },
+    { trigger: "hav",    label: "HAVING condition",             snippet: "HAVING " },
+    { trigger: "joi",    label: "JOIN table ON condition",      snippet: "JOIN  ON " },
+    { trigger: "lim",    label: "LIMIT n",                      snippet: "LIMIT " },
+    { trigger: "dis",    label: "SELECT DISTINCT",              snippet: "SELECT DISTINCT " },
+    { trigger: "cou",    label: "COUNT(*)",                     snippet: "COUNT(*)" },
+    { trigger: "avg",    label: "AVG(column)",                  snippet: "AVG()" },
+    { trigger: "sum",    label: "SUM(column)",                  snippet: "SUM()" },
+    { trigger: "max",    label: "MAX(column)",                  snippet: "MAX()" },
+    { trigger: "min",    label: "MIN(column)",                  snippet: "MIN()" },
+  ],
 };
 
 const DIFFICULTY_STYLES: Record<string, string> = {
@@ -257,10 +273,11 @@ export default function ProblemSolver() {
 
   const [language, setLanguage]     = useState<LangId>("python");
   const [code, setCode]             = useState<Record<LangId, string>>({
-    python: "# Write your solution here\npass",
+    python:     "# Write your solution here\npass",
     javascript: "// Write your solution here",
-    cpp: "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // your code here\n    return 0;\n}",
-    java: "public class Solution {\n    public static void main(String[] args) {\n        // your code here\n    }\n}",
+    cpp:        "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    // your code here\n    return 0;\n}",
+    java:       "public class Solution {\n    public static void main(String[] args) {\n        // your code here\n    }\n}",
+    sql:        "-- Write your SQL query here\nSELECT * FROM table_name;",
   });
   const [customInput, setCustomInput]       = useState("");
   const [useCustomInput, setUseCustomInput] = useState(false);
@@ -272,7 +289,27 @@ export default function ProblemSolver() {
   const [status, setStatus]                 = useState<"solved" | "attempted" | null>(null);
   const [marking, setMarking]               = useState(false);
   const [copied, setCopied]                 = useState(false);
-  const [outputExpanded, setOutputExpanded] = useState(false);
+  const [outputHeight, setOutputHeight]     = useState(36); // 36 = collapsed (tab bar only)
+  const [sqlSetup, setSqlSetup]             = useState(""); // read-only table setup block for SQL problems
+
+  // Refs
+  const dragRef  = useRef<{ active: boolean; startY: number; startH: number }>({ active: false, startY: 0, startH: 0 });
+  const gutterRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!dragRef.current.active) return;
+      const delta = dragRef.current.startY - e.clientY;
+      setOutputHeight(Math.max(36, Math.min(520, dragRef.current.startH + delta)));
+    };
+    const onUp = () => { dragRef.current.active = false; };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup",   onUp);
+    return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
+  }, []);
+  const startOutputDrag = (e: React.MouseEvent) => {
+    dragRef.current = { active: true, startY: e.clientY, startH: outputHeight };
+    e.preventDefault();
+  };
 
   // Autocomplete
   const [suggestions, setSuggestions]               = useState<Array<{ label: string; snippet: string }>>([]);
@@ -290,20 +327,36 @@ export default function ProblemSolver() {
     problemApi.getBySlug(slug).then((data: any) => {
       setProblem(data);
       setStatus(data.userStatus);
+
+      // Split SQL starter code into read-only setup + editable solution
+      const SQL_MARKER = "-- Write your solution below";
+      const sqlFull = data.starterCode?.sql || "-- Write your SQL query here\nSELECT * FROM table_name;";
+      const markerIdx = sqlFull.indexOf(SQL_MARKER);
+      let sqlSetupPart = "";
+      let sqlSolutionPart = sqlFull;
+      if (markerIdx !== -1) {
+        sqlSetupPart    = sqlFull.slice(0, markerIdx + SQL_MARKER.length);
+        sqlSolutionPart = sqlFull.slice(markerIdx + SQL_MARKER.length).replace(/^\n/, "") || "-- Your query here";
+      }
+      setSqlSetup(sqlSetupPart);
+
       setCode({
         python:     data.starterCode?.python     || "# Write your solution here\npass",
         javascript: data.starterCode?.javascript || "// Write your solution here",
         cpp:        data.starterCode?.cpp        || "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    return 0;\n}",
         java:       data.starterCode?.java       || "public class Solution {\n    public static void main(String[] args) {}\n}",
+        sql:        sqlSolutionPart,
       });
+      // Auto-select SQL tab for SQL-type problems
+      if (data.type === "sql") setLanguage("sql");
     }).catch((err: any) => {
       setLoadError(err?.message || "Problem not found");
     }).finally(() => setLoading(false));
   }, [slug, navigate]);
 
   // Auto-expand output panel when results arrive
-  useEffect(() => { if (output !== null) setOutputExpanded(true); }, [output]);
-  useEffect(() => { if (submissionResult !== null) setOutputExpanded(true); }, [submissionResult]);
+  useEffect(() => { if (output !== null) setOutputHeight((h) => h < 200 ? 260 : h); }, [output]);
+  useEffect(() => { if (submissionResult !== null) setOutputHeight((h) => h < 200 ? 260 : h); }, [submissionResult]);
 
   // ── Autocomplete logic ────────────────────────────────────────────────────
   const getCurrentWord = (value: string, cursor: number): string => {
@@ -417,6 +470,12 @@ export default function ProblemSolver() {
     }
   };
 
+  // ── Full code helper (prepends SQL setup for SQL problems) ───────────────
+  const getFullCode = (lang: LangId = language): string => {
+    if (lang === "sql" && sqlSetup) return sqlSetup + "\n" + code[lang];
+    return code[lang];
+  };
+
   // ── Run code ──────────────────────────────────────────────────────────────
   const handleRun = async () => {
     if (!problem) return;
@@ -425,7 +484,7 @@ export default function ProblemSolver() {
     setOutputTab("output");
     setSubmissionResult(null);
     try {
-      const result = await compileApi.run({ language, code: code[language], stdin: useCustomInput ? customInput : "" });
+      const result = await compileApi.run({ language, code: getFullCode(), stdin: useCustomInput ? customInput : "" });
       setOutput(result as any);
     } catch (err: any) {
       setOutput({ stdout: "", stderr: err.message || "Failed to run code.", exitCode: 1 });
@@ -442,7 +501,7 @@ export default function ProblemSolver() {
     setSubmissionResult(null);
     setOutputTab("results");
     try {
-      const result = await problemApi.submit(problem.slug, { language, code: code[language] });
+      const result = await problemApi.submit(problem.slug, { language, code: getFullCode() });
       setSubmissionResult(result);
       if (result.status === "accepted") setStatus("solved");
       else setStatus((prev) => (prev === "solved" ? prev : "attempted"));
@@ -471,16 +530,29 @@ export default function ProblemSolver() {
 
   const handleReset = () => {
     if (!problem) return;
-    setCode((prev) => ({ ...prev, [language]: problem.starterCode?.[language as keyof typeof problem.starterCode] || "" }));
+    if (language === "sql" && sqlSetup) {
+      const SQL_MARKER = "-- Write your solution below";
+      const sqlFull = problem.starterCode?.sql || "";
+      const markerIdx = sqlFull.indexOf(SQL_MARKER);
+      const solutionPart = markerIdx !== -1
+        ? sqlFull.slice(markerIdx + SQL_MARKER.length).replace(/^\n/, "") || "-- Your query here"
+        : sqlFull;
+      setCode((prev) => ({ ...prev, sql: solutionPart }));
+    } else {
+      setCode((prev) => ({ ...prev, [language]: problem.starterCode?.[language as keyof typeof problem.starterCode] || "" }));
+    }
     setOutput(null);
     setSuggestions([]);
   };
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(code[language]);
+    await navigator.clipboard.writeText(getFullCode());
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
+
+  const handleUndo = () => { textareaRef.current?.focus(); document.execCommand("undo"); };
+  const handleRedo = () => { textareaRef.current?.focus(); document.execCommand("redo"); };
 
   if (loading) {
     return (
@@ -509,7 +581,7 @@ export default function ProblemSolver() {
   const submissionAccepted = submissionResult?.status === "accepted";
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col">
+    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden">
       {/* ── Top Bar ── */}
       <div className="bg-slate-800 border-b border-slate-700 px-4 py-2.5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
@@ -548,7 +620,7 @@ export default function ProblemSolver() {
       </div>
 
       {/* ── Main ── */}
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden" style={{ height: "calc(100vh - 49px)" }}>
+      <div className="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden">
 
         {/* ── LEFT: Problem Description ── */}
         <div className="w-full h-[45%] md:h-full md:w-[45%] md:min-w-[320px] bg-slate-50 flex flex-col border-b md:border-b-0 md:border-r border-slate-700 overflow-hidden">
@@ -646,7 +718,14 @@ export default function ProblemSolver() {
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <button onClick={handleUndo} title="Undo (Ctrl+Z)" className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
+                <Undo2 className="w-3 h-3" />
+              </button>
+              <button onClick={handleRedo} title="Redo (Ctrl+Y)" className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
+                <Redo2 className="w-3 h-3" />
+              </button>
+              <div className="w-px h-4 bg-slate-600" />
               <button onClick={handleCopy} className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
                 {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
                 {copied ? "Copied!" : "Copy"}
@@ -658,53 +737,96 @@ export default function ProblemSolver() {
           </div>
 
           {/* ── Code editor — fills all space between toolbar and output ── */}
-          <div className="flex-1 min-h-0 relative overflow-hidden">
-            <textarea
-              ref={textareaRef}
-              value={currentCode}
-              onChange={(e) => {
-                const value  = e.target.value;
-                const cursor = e.target.selectionStart;
-                setCode((prev) => ({ ...prev, [language]: value }));
-                updateSuggestions(value, cursor);
-              }}
-              onKeyDown={handleKeyDown}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-              spellCheck={false}
-              className="absolute inset-0 w-full h-full bg-slate-900 text-slate-100 font-mono text-sm p-4 resize-none outline-none leading-6 selection:bg-blue-700/50 overflow-y-auto"
-              style={{ fontFamily: "'JetBrains Mono','Fira Code','Cascadia Code',Consolas,'Courier New',monospace", tabSize: 4 }}
-              placeholder="Write your solution here..."
-            />
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
 
-            {/* Autocomplete dropdown */}
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute left-4 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl z-50 w-80 max-h-52 overflow-y-auto"
-                style={{ top: "auto", bottom: "8px" }}>
-                <div className="px-3 py-1.5 border-b border-slate-700 flex items-center gap-2">
-                  <Code2 className="w-3 h-3 text-blue-400" />
-                  <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Completions for "{suggestionPrefix}"</span>
-                  <span className="ml-auto text-[9px] text-slate-600">Tab/↵ to insert · Esc to close</span>
+            {/* SQL read-only setup section */}
+            {language === "sql" && sqlSetup && (
+              <div className="shrink-0 max-h-52 overflow-y-auto bg-slate-800/60 border-b border-slate-700">
+                <div className="flex items-center gap-1.5 px-4 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-700/50 sticky top-0 bg-slate-800 z-10">
+                  <Lock className="w-3 h-3 text-amber-400" />
+                  <span className="text-amber-400">Read-only</span>
+                  <span className="text-slate-500">· Table Setup (auto-run before your query)</span>
                 </div>
-                {suggestions.map((s, i) => (
-                  <button
-                    key={i}
-                    onMouseDown={(e) => { e.preventDefault(); applySnippet(s.snippet, textareaRef.current?.selectionStart || 0); }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${i === activeSuggestionIdx ? "bg-blue-600/30 border-l-2 border-blue-500" : "hover:bg-slate-700/50"}`}
-                  >
-                    <span className="text-[10px] font-mono font-bold text-blue-400 w-16 shrink-0 truncate">{s.trigger}</span>
-                    <span className="text-xs text-slate-300 truncate flex-1">{s.label}</span>
-                  </button>
-                ))}
+                <pre
+                  className="font-mono text-sm text-slate-400 px-4 py-3 leading-6 whitespace-pre"
+                  style={{ fontFamily: "'JetBrains Mono','Fira Code','Cascadia Code',Consolas,'Courier New',monospace" }}
+                >
+                  {sqlSetup}
+                </pre>
               </div>
             )}
+
+            {/* Editor with line numbers */}
+            <div className="flex-1 min-h-0 flex overflow-hidden relative">
+              {/* Line number gutter */}
+              <div
+                ref={gutterRef}
+                className="shrink-0 w-11 bg-slate-800 text-slate-500 font-mono text-sm leading-6 text-right select-none overflow-hidden pt-4 pr-2"
+                style={{ fontFamily: "'JetBrains Mono','Fira Code','Cascadia Code',Consolas,'Courier New',monospace" }}
+              >
+                {currentCode.split("\n").map((_, i) => (
+                  <div key={i} className="leading-6">{i + 1}</div>
+                ))}
+              </div>
+
+              {/* Textarea */}
+              <textarea
+                ref={textareaRef}
+                value={currentCode}
+                onChange={(e) => {
+                  const value  = e.target.value;
+                  const cursor = e.target.selectionStart;
+                  setCode((prev) => ({ ...prev, [language]: value }));
+                  updateSuggestions(value, cursor);
+                }}
+                onKeyDown={handleKeyDown}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                onScroll={(e) => { if (gutterRef.current) gutterRef.current.scrollTop = e.currentTarget.scrollTop; }}
+                spellCheck={false}
+                className="flex-1 min-w-0 bg-slate-900 text-slate-100 font-mono text-sm p-4 pl-3 resize-none outline-none leading-6 selection:bg-blue-700/50 overflow-y-auto"
+                style={{ fontFamily: "'JetBrains Mono','Fira Code','Cascadia Code',Consolas,'Courier New',monospace", tabSize: 4 }}
+                placeholder="Write your solution here..."
+              />
+
+              {/* Autocomplete dropdown */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute left-14 bg-slate-800 border border-slate-600 rounded-lg shadow-2xl z-50 w-80 max-h-52 overflow-y-auto"
+                  style={{ top: "auto", bottom: "8px" }}>
+                  <div className="px-3 py-1.5 border-b border-slate-700 flex items-center gap-2">
+                    <Code2 className="w-3 h-3 text-blue-400" />
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Completions for "{suggestionPrefix}"</span>
+                    <span className="ml-auto text-[9px] text-slate-600">Tab/↵ to insert · Esc to close</span>
+                  </div>
+                  {suggestions.map((s, i) => (
+                    <button
+                      key={i}
+                      onMouseDown={(e) => { e.preventDefault(); applySnippet(s.snippet, textareaRef.current?.selectionStart || 0); }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${i === activeSuggestionIdx ? "bg-blue-600/30 border-l-2 border-blue-500" : "hover:bg-slate-700/50"}`}
+                    >
+                      <span className="text-[10px] font-mono font-bold text-blue-400 w-16 shrink-0 truncate">{s.trigger}</span>
+                      <span className="text-xs text-slate-300 truncate flex-1">{s.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* ── Output Panel — collapsible strip at the bottom ── */}
+          {/* ── Output Panel — draggable / collapsible strip at the bottom ── */}
           <div
-            className="shrink-0 flex flex-col overflow-hidden transition-all duration-200 bg-slate-950 border-t border-slate-700"
-            style={{ height: outputExpanded ? "260px" : "36px" }}
+            className="shrink-0 flex flex-col overflow-hidden bg-slate-950 border-t border-slate-700"
+            style={{ height: `${outputHeight}px` }}
           >
+            {/* Drag Handle */}
+            <div
+              onMouseDown={startOutputDrag}
+              className="h-1.5 bg-slate-800 hover:bg-blue-600 cursor-ns-resize flex items-center justify-center group shrink-0 transition-colors"
+              title="Drag to resize output panel"
+            >
+              <div className="w-8 h-0.5 rounded-full bg-slate-600 group-hover:bg-white transition-colors" />
+            </div>
+
             {/* Tab bar — always visible, 36px tall */}
             <div className="flex items-center justify-between px-4 border-b border-slate-800 h-9 shrink-0">
               <div className="flex items-center gap-0">
@@ -713,7 +835,7 @@ export default function ProblemSolver() {
                   { id: "results", icon: CheckCircle2,  label: "Results" },
                   { id: "input",   icon: Code2,         label: "Custom Input" },
                 ].map(({ id, icon: Icon, label }) => (
-                  <button key={id} onClick={() => { setOutputTab(id as any); setOutputExpanded(true); }}
+                  <button key={id} onClick={() => { setOutputTab(id as any); setOutputHeight((h) => h < 200 ? 260 : h); }}
                     className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border-b-2 transition-colors ${outputTab === id ? "border-blue-500 text-blue-400" : "border-transparent text-slate-500 hover:text-slate-300"}`}>
                     <Icon className="w-3 h-3" />{label}
                     {id === "output" && hasOutput && <span className={`w-1.5 h-1.5 rounded-full ml-1 ${isError ? "bg-red-500" : "bg-green-500"}`} />}
@@ -732,11 +854,11 @@ export default function ProblemSolver() {
                   </div>
                 )}
                 <button
-                  onClick={() => setOutputExpanded((v) => !v)}
+                  onClick={() => setOutputHeight((h) => h <= 36 ? 260 : 36)}
                   className="flex items-center gap-1 px-2 py-1 text-[10px] text-slate-500 hover:text-slate-300 transition-colors"
-                  title={outputExpanded ? "Collapse output" : "Expand output"}
+                  title={outputHeight > 36 ? "Collapse output" : "Expand output"}
                 >
-                  {outputExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+                  {outputHeight > 36 ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
