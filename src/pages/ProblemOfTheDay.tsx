@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Navbar } from "@/components/shared/navbar";
+import { Footer } from "@/components/shared/footer";
 import { Calendar, Code2, Database, Zap, ChevronRight } from "lucide-react";
 import { Loader2 } from "lucide-react";
 
@@ -152,6 +153,7 @@ export default function ProblemOfTheDayPage() {
           </ul>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

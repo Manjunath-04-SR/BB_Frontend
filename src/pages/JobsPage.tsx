@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
-  Search, MapPin, Briefcase, Clock, ExternalLink, Bookmark,
+  Search, Briefcase, Clock, ExternalLink, Bookmark,
   ChevronRight, ChevronLeft, Loader2, RefreshCw, Zap,
   Globe, Building2, Code2, Brain, BarChart3, Monitor,
   TrendingUp, ArrowRight, CheckCircle2, AlertCircle, Star, Users,
   Wifi,
 } from "lucide-react";
 import { Navbar } from "@/components/shared/navbar";
+import { Footer } from "@/components/shared/footer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface JSearchJob {
@@ -107,17 +108,13 @@ function normalise(j: JSearchJob): Job {
   };
 }
 
-async function fetchJSearch(
-  search: string,
-  category: string,
-  page: number,
-): Promise<{ jobs: Job[]; hasMore: boolean }> {
+async function fetchJSearch(search: string, category: string): Promise<Job[]> {
   if (!RAPIDAPI_KEY) throw new Error("VITE_RAPIDAPI_KEY is not set in your .env file.");
 
   const catEntry = CATEGORIES.find((c) => c.id === category);
   const query    = search ? `${search} jobs India` : (catEntry?.query || CATEGORIES[0].query);
 
-  const params = new URLSearchParams({ query, num_pages: "1", page: String(page) });
+  const params = new URLSearchParams({ query, num_pages: "3", page: "1" });
   const res = await fetch(`https://jsearch.p.rapidapi.com/search?${params}`, {
     headers: {
       "X-RapidAPI-Key":  RAPIDAPI_KEY,
@@ -128,8 +125,7 @@ async function fetchJSearch(
   const data = await res.json();
   if (data.status !== "OK") throw new Error(data.error?.message || "JSearch returned an error");
 
-  const jobs = (data.data || []).map(normalise) as Job[];
-  return { jobs, hasMore: jobs.length === 10 };
+  return (data.data || []).map(normalise) as Job[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -277,8 +273,9 @@ export default function JobsPage() {
   const [searchInput, setSearchInput] = useState("");
   const [category,    setCategory]    = useState("");
   const [page,        setPage]        = useState(1);
-  const [hasMore,     setHasMore]     = useState(true);
   const [savedJobs,   setSavedJobs]   = useState<Set<string>>(new Set());
+
+  const JOBS_PER_PAGE = 9;
 
   useEffect(() => {
     try {
@@ -287,13 +284,13 @@ export default function JobsPage() {
     } catch {}
   }, []);
 
-  const loadJobs = useCallback(async (kw: string, cat: string, pg: number) => {
+  const loadJobs = useCallback(async (kw: string, cat: string) => {
     setLoading(true);
     setError(null);
+    setPage(1);
     try {
-      const { jobs: fetched, hasMore: more } = await fetchJSearch(kw, cat, pg);
+      const fetched = await fetchJSearch(kw, cat);
       setJobs(fetched);
-      setHasMore(more);
     } catch (e: any) {
       setError(e.message || "Failed to load jobs. Please try again.");
       setJobs([]);
@@ -303,18 +300,16 @@ export default function JobsPage() {
   }, []);
 
   useEffect(() => {
-    loadJobs(search, category, page);
-  }, [search, category, page, loadJobs]);
+    loadJobs(search, category);
+  }, [search, category, loadJobs]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    setPage(1);
     setSearch(searchInput.trim());
   };
 
   const handleCategory = (id: string) => {
     setCategory(id);
-    setPage(1);
   };
 
   const goToPage = (pg: number) => {
@@ -331,7 +326,9 @@ export default function JobsPage() {
     });
   };
 
-  const activeCat  = CATEGORIES.find((c) => c.id === category) || CATEGORIES[0];
+  const totalPages  = Math.ceil(jobs.length / JOBS_PER_PAGE);
+  const pagedJobs   = jobs.slice((page - 1) * JOBS_PER_PAGE, page * JOBS_PER_PAGE);
+  const activeCat   = CATEGORIES.find((c) => c.id === category) || CATEGORIES[0];
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -394,9 +391,9 @@ export default function JobsPage() {
           {/* Stats */}
           <div className="flex flex-wrap items-center justify-center gap-6 mt-8">
             {[
-              { label: "Jobs Found",   value: loading ? "…" : `${jobs.length * page}+`, icon: Briefcase },
-              { label: "Sources",      value: "LinkedIn · Indeed",                  icon: Globe     },
-              { label: "Powered by",   value: "JSearch API",                        icon: Zap       },
+              { label: "Jobs Found",   value: loading ? "…" : `${jobs.length}+`, icon: Briefcase },
+              { label: "Sources",      value: "LinkedIn · Indeed",                icon: Globe     },
+              { label: "Powered by",   value: "JSearch API",                      icon: Zap       },
             ].map((s) => (
               <div key={s.label} className="flex items-center gap-2 text-slate-300">
                 <div className="w-7 h-7 rounded-lg bg-white/10 flex items-center justify-center">
@@ -468,14 +465,15 @@ export default function JobsPage() {
               </span>
             ) : (
               <span>
-                <span className="text-blue-600 font-black">{jobs.length}</span> jobs — page {page}
+                <span className="text-blue-600 font-black">{jobs.length}</span> jobs
                 {search && <span className="text-slate-400 font-normal"> for "{search}"</span>}
                 {category && <span className="text-slate-400 font-normal"> in {activeCat.label}</span>}
+                {totalPages > 1 && <span className="text-slate-400 font-normal"> — page {page} of {totalPages}</span>}
               </span>
             )}
           </div>
           <button
-            onClick={() => loadJobs(search, category, page)}
+            onClick={() => loadJobs(search, category)}
             disabled={loading}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
@@ -511,7 +509,7 @@ export default function JobsPage() {
             <h3 className="text-lg font-bold text-slate-800 mb-2">Could not load jobs</h3>
             <p className="text-slate-500 text-sm max-w-md mx-auto mb-6">{error}</p>
             <button
-              onClick={() => loadJobs(search, category, page)}
+              onClick={() => loadJobs(search, category)}
               className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm"
             >
               Try Again
@@ -525,7 +523,7 @@ export default function JobsPage() {
             <h3 className="text-lg font-bold text-slate-800 mb-2">No jobs found</h3>
             <p className="text-slate-500 text-sm mb-5">Try different keywords or switch to "All Jobs".</p>
             <button
-              onClick={() => { setSearch(""); setSearchInput(""); setCategory(""); setPage(1); }}
+              onClick={() => { setSearch(""); setSearchInput(""); setCategory(""); }}
               className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm"
             >
               Show All Jobs
@@ -534,44 +532,49 @@ export default function JobsPage() {
         ) : (
           <>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-              {jobs.map((job) => (
+              {pagedJobs.map((job) => (
                 <JobCard key={job.id} job={job} saved={savedJobs.has(job.id)} onSave={toggleSave} />
               ))}
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-center gap-3 mb-8">
-              <button
-                onClick={() => goToPage(Math.max(1, page - 1))}
-                disabled={page === 1 || loading}
-                className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <ChevronLeft className="w-4 h-4" />Prev
-              </button>
-              <div className="flex items-center gap-1">
-                {page > 2 && (
-                  <button onClick={() => goToPage(1)} className="w-9 h-9 rounded-xl text-sm font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">1</button>
-                )}
-                {page > 3 && <span className="text-slate-400 text-sm px-1">…</span>}
-                {[page - 1, page, page + 1].filter((p) => p >= 1 && (p <= page || hasMore)).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => goToPage(p)}
-                    disabled={loading}
-                    className={`w-9 h-9 rounded-xl text-sm font-bold transition-all ${p === page ? "bg-slate-900 text-white shadow-md" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"}`}
-                  >
-                    {p}
-                  </button>
-                ))}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 mb-8">
+                <button
+                  onClick={() => goToPage(Math.max(1, page - 1))}
+                  disabled={page === 1}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-4 h-4" />Prev
+                </button>
+                <div className="flex items-center gap-1">
+                  {page > 2 && (
+                    <button onClick={() => goToPage(1)} className="w-9 h-9 rounded-xl text-sm font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">1</button>
+                  )}
+                  {page > 3 && <span className="text-slate-400 text-sm px-1">…</span>}
+                  {[page - 1, page, page + 1].filter((p) => p >= 1 && p <= totalPages).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => goToPage(p)}
+                      className={`w-9 h-9 rounded-xl text-sm font-bold transition-all ${p === page ? "bg-slate-900 text-white shadow-md" : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                  {page < totalPages - 2 && <span className="text-slate-400 text-sm px-1">…</span>}
+                  {page < totalPages - 1 && (
+                    <button onClick={() => goToPage(totalPages)} className="w-9 h-9 rounded-xl text-sm font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">{totalPages}</button>
+                  )}
+                </div>
+                <button
+                  onClick={() => goToPage(page + 1)}
+                  disabled={page === totalPages}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                onClick={() => goToPage(page + 1)}
-                disabled={!hasMore || loading}
-                className="flex items-center gap-1.5 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Next <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
+            )}
           </>
         )}
 
@@ -596,21 +599,7 @@ export default function JobsPage() {
         </div>
       </main>
 
-      <footer className="border-t border-slate-200 mt-12 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center">
-              <span className="text-white font-bold text-xs">B</span>
-            </div>
-            <span className="text-slate-500 font-medium text-sm">BeyondBasic Jobs</span>
-          </div>
-          <p className="text-slate-400 text-xs text-center">
-            Job listings powered by{" "}
-            <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank" rel="noopener noreferrer" className="text-purple-600 font-semibold hover:underline">JSearch API</a>
-            {" "}— aggregating LinkedIn, Indeed & Glassdoor.
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

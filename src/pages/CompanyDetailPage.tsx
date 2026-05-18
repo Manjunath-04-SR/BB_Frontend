@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { ExternalLink, MapPin, DollarSign, Users, Target, CheckCircle2, ChevronRight, Briefcase, Clock, ArrowRight, BadgeCheck, BookOpen, Brain, Zap } from "lucide-react";
 import { companyApi } from "@/lib/api";
 import { Navbar } from "@/components/shared/navbar";
+import { Footer } from "@/components/shared/footer";
 
 interface Round {
   name: string;
@@ -333,6 +334,7 @@ export default function CompanyDetailPage() {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

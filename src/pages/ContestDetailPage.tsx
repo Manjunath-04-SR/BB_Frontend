@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/shared/navbar";
+import { Footer } from "@/components/shared/footer";
 import { contestApi } from "@/lib/api";
 import { Trophy, Clock, Users, ArrowLeft, Loader2, CheckCircle2, AlertCircle, Crown, Code2, Plus, Trash2, X, ChevronRight, Star, ListChecks } from "lucide-react";
 
@@ -593,6 +594,7 @@ export default function ContestDetailPage() {
       </div>
 
       {showAddProblem && contest && <AddProblemModal contestId={contest._id} onAdded={loadContest} onClose={() => setShowAddProblem(false)} />}
+      <Footer />
     </div>
   );
 }

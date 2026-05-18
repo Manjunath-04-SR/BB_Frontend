@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Navbar } from "@/components/shared/navbar";
+import { Footer } from "@/components/shared/footer";
 import { contestApi } from "@/lib/api";
 import {
   Trophy, Clock, Users, Calendar, ChevronRight, Loader2,
@@ -405,6 +406,7 @@ export default function ContestsPage() {
       {modal && (
         <AdminModal initial={modal} onSave={handleSave} onClose={() => setModal(null)} saving={saving} />
       )}
+      <Footer />
     </div>
   );
 }

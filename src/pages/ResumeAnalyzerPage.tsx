@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/shared/navbar";
+import { Footer } from "@/components/shared/footer";
 import * as pdfjsLib from "pdfjs-dist";
 import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
@@ -405,6 +406,7 @@ export default function ResumeAnalyzerPage() {
           </div>
         )}
       </div>
+      <Footer />
     </div>
   );
 }

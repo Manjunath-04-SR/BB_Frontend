@@ -12,6 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { courseApi, enrollmentApi } from "@/lib/api";
 import { Navbar } from "@/components/shared/navbar";
+import { Footer } from "@/components/shared/footer";
 
 interface Subtopic {
   _id: string;
@@ -505,6 +506,7 @@ export default function CourseDetail() {
           </div>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

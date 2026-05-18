@@ -6,6 +6,7 @@ import {
   ChevronRight, Loader2, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import { Navbar } from "@/components/shared/navbar";
+import { Footer } from "@/components/shared/footer";
 import { userApi } from "@/lib/api";
 
 const BRANCHES = [
@@ -540,6 +541,7 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
+      <Footer />
     </div>
   );
 }

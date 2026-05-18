@@ -4,7 +4,7 @@ import {
   Flame, Trophy, Calendar, Code2, TrendingUp, Clock,
   CheckCircle2, Star, Target, BookOpen, Zap, Medal,
   ChevronRight, ChevronLeft, Play, Lock, Award, BarChart3,
-  Briefcase, Brain, Users, FileText, Globe,
+  Briefcase, Brain, Users, FileText, Globe, Database,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { userApi, problemApi } from "@/lib/api";
 import { Navbar } from "@/components/shared/navbar";
+import { Footer } from "@/components/shared/footer";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Stats {
@@ -66,6 +67,7 @@ interface Potd {
   difficulty: string;
   topicTag: string;
   description: string;
+  type?: "coding" | "sql";
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -153,7 +155,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [potd, setPotd] = useState<Potd | null>(null);
+  const [codingPotd, setCodingPotd] = useState<Potd | null>(null);
+  const [sqlPotd,    setSqlPotd]    = useState<Potd | null>(null);
   const [potdLoading, setPotdLoading] = useState(true);
 
   // Calendar navigation
@@ -172,10 +175,10 @@ export default function Dashboard() {
     setPotdLoading(true);
     problemApi.getPotd()
       .then((res: any) => {
-        const problem = res?.codingProblem || res?.sqlProblem || null;
-        setPotd(problem);
+        setCodingPotd(res?.codingProblem || null);
+        setSqlPotd(res?.sqlProblem    || null);
       })
-      .catch(() => setPotd(null))
+      .catch(() => { setCodingPotd(null); setSqlPotd(null); })
       .finally(() => setPotdLoading(false));
 
     userApi.getDashboardStats()
@@ -248,91 +251,104 @@ export default function Dashboard() {
         {/* ── POTD + Calendar ──────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-6">
 
-          {/* POTD Card — takes 3 cols */}
-          <div className="lg:col-span-3">
-            <Card className="border-0 shadow-lg overflow-hidden relative h-full min-h-[200px]">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800" />
-              {/* Decorative blobs */}
-              <div className="absolute top-0 left-1/4 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
-              <div className="absolute bottom-0 right-1/4 w-40 h-40 bg-purple-500/20 rounded-full blur-2xl" />
+          {/* POTD Cards — takes 3 cols, split into Coding + SQL side-by-side */}
+          <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
 
-              <div className="relative p-5 flex flex-col h-full">
-                {/* Header pill */}
-                <div className="flex items-center gap-2 mb-3 flex-wrap">
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white/15 backdrop-blur-sm rounded-full border border-white/20">
-                    <Calendar className="w-3 h-3 text-blue-200" />
-                    <span className="text-blue-100 font-bold text-[11px] uppercase tracking-wide">Problem of the Day</span>
+            {/* ── Coding POTD ── */}
+            <Card className="border-0 shadow-lg overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800" />
+              <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
+              <div className="relative p-4 flex flex-col gap-2 h-full">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-white/15 rounded-full border border-white/20">
+                    <Code2 className="w-3 h-3 text-blue-200" />
+                    <span className="text-blue-100 font-bold text-[10px] uppercase tracking-wide">Coding Challenge</span>
                   </div>
-                  {potd && (
+                  {codingPotd && (
                     <Badge className={`text-[10px] font-bold border ${
-                      potd.difficulty === "Easy"   ? "bg-green-500/20 text-green-200 border-green-400/30" :
-                      potd.difficulty === "Medium" ? "bg-yellow-500/20 text-yellow-200 border-yellow-400/30" :
+                      codingPotd.difficulty === "Easy"   ? "bg-green-500/20 text-green-200 border-green-400/30" :
+                      codingPotd.difficulty === "Medium" ? "bg-yellow-500/20 text-yellow-200 border-yellow-400/30" :
                       "bg-red-500/20 text-red-200 border-red-400/30"
-                    }`}>{potd.difficulty}</Badge>
+                    }`}>{codingPotd.difficulty}</Badge>
                   )}
                 </div>
-
-                {/* Title */}
-                <h2 className="text-xl font-black text-white mb-1.5 leading-tight">
-                  {potdLoading ? (
-                    <Skeleton className="h-6 w-48 bg-white/20" />
-                  ) : potd ? potd.title : (
-                    <span className="text-white/60 text-base font-semibold">No problem set for today</span>
-                  )}
+                <h2 className="text-base font-black text-white leading-tight">
+                  {potdLoading ? <Skeleton className="h-5 w-36 bg-white/20" /> : codingPotd ? codingPotd.title : <span className="text-white/60 text-sm">No coding problem today</span>}
                 </h2>
-
-                {/* Description */}
-                <p className="text-blue-100/80 text-xs leading-relaxed mb-3 line-clamp-2 flex-1">
-                  {potdLoading ? "Loading today's challenge..." : potd
-                    ? potd.description.replace(/<[^>]*>/g, "").slice(0, 130) + "…"
-                    : "Check back later or ask an admin to set the problem of the day."}
+                <p className="text-blue-100/75 text-[11px] leading-relaxed line-clamp-2 flex-1">
+                  {potdLoading ? "Loading…" : codingPotd ? codingPotd.description.replace(/<[^>]*>/g, "").slice(0, 90) + "…" : "Check back later."}
                 </p>
-
-                {/* Meta row */}
-                {potd && (
-                  <div className="flex items-center gap-4 mb-4">
-                    <div>
-                      <p className="text-[10px] text-blue-300 font-semibold uppercase">Topic</p>
-                      <p className="text-white font-bold text-xs">{potd.topicTag}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-blue-300 font-semibold uppercase">Difficulty</p>
-                      <p className="text-white font-bold text-xs">{potd.difficulty}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* CTA */}
-                {potdLoading ? (
-                  <Skeleton className="h-9 w-32 bg-white/20 rounded-xl" />
-                ) : potd ? (
-                  <Link to={`/problems/${potd.slug}`} className="inline-flex">
-                    <button className="flex items-center gap-2 bg-white text-blue-700 hover:bg-blue-50 font-bold text-sm px-4 py-2 rounded-xl shadow-lg hover:scale-105 active:scale-100 transition-all">
-                      <Play className="w-3.5 h-3.5 fill-blue-600" />Solve Now
-                    </button>
-                  </Link>
-                ) : (
-                  <Link to="/problems" className="inline-flex">
-                    <button className="flex items-center gap-2 bg-white/20 text-white border border-white/30 font-bold text-sm px-4 py-2 rounded-xl hover:bg-white/30 transition-all">
-                      Browse Problems
-                    </button>
-                  </Link>
-                )}
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  {codingPotd && <span className="text-[10px] text-blue-300 font-semibold">{codingPotd.topicTag}</span>}
+                  {potdLoading ? <Skeleton className="h-7 w-24 bg-white/20 rounded-lg" /> : codingPotd ? (
+                    <Link to={`/problems/${codingPotd.slug}`}>
+                      <button className="flex items-center gap-1.5 bg-white text-blue-700 hover:bg-blue-50 font-bold text-xs px-3 py-1.5 rounded-lg shadow hover:scale-105 transition-all">
+                        <Play className="w-3 h-3 fill-blue-600" />Solve
+                      </button>
+                    </Link>
+                  ) : (
+                    <Link to="/problems">
+                      <button className="flex items-center gap-1.5 bg-white/20 text-white border border-white/30 font-bold text-xs px-3 py-1.5 rounded-lg hover:bg-white/30 transition-all">Browse</button>
+                    </Link>
+                  )}
+                </div>
               </div>
             </Card>
+
+            {/* ── SQL POTD ── */}
+            <Card className="border-0 shadow-lg overflow-hidden relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700" />
+              <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
+              <div className="relative p-4 flex flex-col gap-2 h-full">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-white/15 rounded-full border border-white/20">
+                    <Database className="w-3 h-3 text-emerald-200" />
+                    <span className="text-emerald-100 font-bold text-[10px] uppercase tracking-wide">SQL Challenge</span>
+                  </div>
+                  {sqlPotd && (
+                    <Badge className={`text-[10px] font-bold border ${
+                      sqlPotd.difficulty === "Easy"   ? "bg-green-500/20 text-green-200 border-green-400/30" :
+                      sqlPotd.difficulty === "Medium" ? "bg-yellow-500/20 text-yellow-200 border-yellow-400/30" :
+                      "bg-red-500/20 text-red-200 border-red-400/30"
+                    }`}>{sqlPotd.difficulty}</Badge>
+                  )}
+                </div>
+                <h2 className="text-base font-black text-white leading-tight">
+                  {potdLoading ? <Skeleton className="h-5 w-36 bg-white/20" /> : sqlPotd ? sqlPotd.title : <span className="text-white/60 text-sm">No SQL problem today</span>}
+                </h2>
+                <p className="text-emerald-100/75 text-[11px] leading-relaxed line-clamp-2 flex-1">
+                  {potdLoading ? "Loading…" : sqlPotd ? sqlPotd.description.replace(/<[^>]*>/g, "").slice(0, 90) + "…" : "Seed SQL problems to enable this section."}
+                </p>
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  {sqlPotd && <span className="text-[10px] text-emerald-300 font-semibold">{sqlPotd.topicTag}</span>}
+                  {potdLoading ? <Skeleton className="h-7 w-24 bg-white/20 rounded-lg" /> : sqlPotd ? (
+                    <Link to={`/problems/${sqlPotd.slug}`}>
+                      <button className="flex items-center gap-1.5 bg-white text-emerald-700 hover:bg-emerald-50 font-bold text-xs px-3 py-1.5 rounded-lg shadow hover:scale-105 transition-all">
+                        <Play className="w-3 h-3 fill-emerald-600" />Solve
+                      </button>
+                    </Link>
+                  ) : (
+                    <Link to="/problem-of-the-day">
+                      <button className="flex items-center gap-1.5 bg-white/20 text-white border border-white/30 font-bold text-xs px-3 py-1.5 rounded-lg hover:bg-white/30 transition-all">View All</button>
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </Card>
+
           </div>
 
           {/* Calendar Card — takes 2 cols */}
           <div className="lg:col-span-2">
             <Card className="border-0 shadow-lg h-full bg-white">
-              <CardHeader className="pb-2 pt-3 px-4">
+              <CardHeader className="pb-1.5 pt-3 px-3">
                 <div className="flex items-center justify-between">
                   {/* Month nav */}
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5">
                     <button onClick={prevMonth} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-slate-100 transition-colors">
                       <ChevronLeft className="w-3.5 h-3.5 text-slate-500" />
                     </button>
-                    <div className="text-center min-w-[110px]">
+                    <div className="text-center min-w-[100px]">
                       <p className="text-xs font-black text-slate-800">{MONTH_NAMES[calMonth]} {calYear}</p>
                     </div>
                     <button onClick={nextMonth} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-slate-100 transition-colors">
@@ -346,18 +362,18 @@ export default function Dashboard() {
                         Today
                       </button>
                     )}
-                    <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 text-[9px] font-black px-1.5 py-0.5">
+                    <Badge className="bg-green-100 text-green-700 border-green-200 text-[9px] font-black px-1.5 py-0.5">
                       {activeDaysCount}d active
                     </Badge>
                   </div>
                 </div>
               </CardHeader>
 
-              <CardContent className="px-4 pb-4 pt-0">
+              <CardContent className="px-3 pb-3 pt-0">
                 {/* Day-of-week headers */}
-                <div className="grid grid-cols-7 mb-1">
+                <div className="grid grid-cols-7 mb-0.5">
                   {["S","M","T","W","T","F","S"].map((d, i) => (
-                    <div key={i} className="text-center text-[9px] font-bold text-slate-400 py-1">{d}</div>
+                    <div key={i} className="text-center text-[9px] font-bold text-slate-400 py-0.5">{d}</div>
                   ))}
                 </div>
 
@@ -366,12 +382,10 @@ export default function Dashboard() {
                   {calendarDays.map((day: any) => (
                     <div
                       key={day.key}
-                      title={day.type === "day" ? `${day.dateStr}: ${day.level > 0 ? `Level ${day.level} activity` : "No activity"}` : ""}
-                      className={`aspect-square rounded flex items-center justify-center text-[9px] font-semibold transition-all ${
+                      title={day.type === "day" ? `${day.dateStr}: ${day.level > 0 ? "Active" : "No activity"}` : ""}
+                      className={`h-7 w-full rounded flex items-center justify-center text-[9px] font-semibold transition-all ${
                         day.type === "empty" ? "" :
-                        day.level >= 3 ? "bg-emerald-600 text-white" :
-                        day.level === 2 ? "bg-emerald-500 text-white" :
-                        day.level === 1 ? "bg-emerald-300 text-white" :
+                        day.level > 0 ? "bg-green-500 text-white" :
                         "bg-slate-100 text-slate-400 hover:bg-slate-200"
                       } ${day.isToday ? "ring-2 ring-blue-500 ring-offset-1 font-black" : ""}`}
                     >
@@ -381,13 +395,12 @@ export default function Dashboard() {
                 </div>
 
                 {/* Legend */}
-                <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
                   <div className="flex items-center gap-2">
-                    <span className="text-[9px] text-slate-400 font-medium">Less</span>
-                    {[0, 1, 2, 3].map((l) => (
-                      <div key={l} className={`w-2.5 h-2.5 rounded-sm ${l === 0 ? "bg-slate-100" : l === 1 ? "bg-emerald-300" : l === 2 ? "bg-emerald-500" : "bg-emerald-600"}`} />
-                    ))}
-                    <span className="text-[9px] text-slate-400 font-medium">More</span>
+                    <div className="w-2.5 h-2.5 rounded-sm bg-slate-100" />
+                    <span className="text-[9px] text-slate-400 font-medium">No activity</span>
+                    <div className="w-2.5 h-2.5 rounded-sm bg-green-500" />
+                    <span className="text-[9px] text-slate-400 font-medium">Active</span>
                   </div>
                   {/* Year quick-jump */}
                   <div className="flex items-center gap-1">
@@ -507,9 +520,9 @@ export default function Dashboard() {
         </div>
 
         {/* ── My Courses + Recent Activity ─────────────────────────────────────── */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          <div className="lg:col-span-2">
-            <Card className="border-0 shadow-lg">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 items-stretch">
+          <div className="lg:col-span-2 h-full">
+            <Card className="border-0 shadow-lg h-full flex flex-col">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -528,7 +541,7 @@ export default function Dashboard() {
                   </Link>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex-1">
                 {loading ? (
                   <div className="space-y-3">
                     {[1,2,3].map((i) => (
@@ -575,20 +588,27 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          <div>
-            <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-sm">
-                    <Clock className="w-3.5 h-3.5 text-white" />
+          <div className="h-full">
+            <Card className="border-0 shadow-lg h-full flex flex-col">
+              <CardHeader className="pb-3 shrink-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center shadow-sm">
+                      <Clock className="w-3.5 h-3.5 text-white" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">Recent Activity</CardTitle>
+                      <CardDescription className="text-xs">Your latest actions</CardDescription>
+                    </div>
                   </div>
-                  <div>
-                    <CardTitle className="text-base">Recent Activity</CardTitle>
-                    <CardDescription className="text-xs">Your latest actions</CardDescription>
-                  </div>
+                  <Link to="/dashboard">
+                    <Button variant="ghost" size="sm" className="text-green-600 text-xs h-7">
+                      View All <ChevronRight className="w-3.5 h-3.5 ml-1" />
+                    </Button>
+                  </Link>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex-1">
                 {loading ? (
                   <div className="space-y-3">
                     {[1,2,3].map((i) => (
@@ -605,7 +625,7 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {data!.recentActivity.map((activity) => {
+                    {data!.recentActivity.slice(0, 4).map((activity) => {
                       const iconData = ACTIVITY_ICONS[activity.activityType] || ACTIVITY_ICONS.solved;
                       const IconComp = iconData.icon;
                       return (
@@ -679,19 +699,7 @@ export default function Dashboard() {
         </Card>
       </main>
 
-      <footer className="border-t border-slate-200 mt-8 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-blue-700 flex items-center justify-center">
-                <span className="text-white font-bold text-xs">B</span>
-              </div>
-              <span className="text-slate-500 font-medium text-xs">BeyondBasic — Learn Beyond Basics</span>
-            </div>
-            <p className="text-slate-400 text-xs">Made with ❤️ for aspiring developers</p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
 
       <style>{`
         @keyframes wave { 0%,100%{transform:rotate(0deg)} 25%{transform:rotate(15deg)} 75%{transform:rotate(-15deg)} }

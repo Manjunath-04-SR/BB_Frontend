@@ -136,8 +136,10 @@ export default function ChatBot() {
       {/* Chat window */}
       {open && (
         <div
-          className={`chat-window fixed bottom-6 right-6 z-50 flex flex-col rounded-2xl shadow-2xl border border-slate-200/80 bg-white overflow-hidden transition-all duration-300 ${
-            minimised ? "w-72 h-14" : "w-[370px] h-[560px] sm:w-[400px] sm:h-[600px]"
+          className={`chat-window fixed z-50 flex flex-col rounded-2xl shadow-2xl border border-slate-200/80 bg-white overflow-hidden transition-all duration-300 ${
+            minimised
+              ? "w-72 h-14 bottom-4 right-4"
+              : "bottom-4 right-4 left-4 sm:left-auto sm:right-5 sm:bottom-5 sm:w-[390px] h-[min(580px,calc(100vh-2rem))]"
           }`}
         >
           {/* Header */}
@@ -150,7 +152,7 @@ export default function ChatBot() {
                 <p className="text-sm font-black text-white leading-tight">BeyondBasic AI</p>
                 <p className="text-[10px] text-white/70 leading-tight flex items-center gap-1">
                   <span className="w-1.5 h-1.5 bg-green-400 rounded-full inline-block" />
-                  Powered by Gemini
+                  Powered by Gemini 2.5
                 </p>
               </div>
             </div>

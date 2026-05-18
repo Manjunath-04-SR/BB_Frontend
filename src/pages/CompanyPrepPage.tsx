@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { companyApi } from "@/lib/api";
 import { Navbar } from "@/components/shared/navbar";
+import { Footer } from "@/components/shared/footer";
 
 interface Company {
   _id: string;
@@ -208,6 +209,7 @@ export default function CompanyPrepPage() {
           </Link>
         </div>
       </section>
+      <Footer />
     </div>
   );
 }
